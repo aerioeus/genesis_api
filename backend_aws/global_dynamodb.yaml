@@ -1,0 +1,380 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  This template creates a DynamoDB table with incremental Backups (PITR)
+  Last Modified: 20.03.2024
+  Author: Exec <aerioeus@gmail.com>
+Parameters:
+  Owner:
+    Description: Individual Name Responsible for the Stack
+    Type : 'AWS::SSM::Parameter::Value<String>'
+    Default: /energicos/LEAD-DEVELOPER_NAME
+
+  Project:
+    Description: The project name
+    Type : 'AWS::SSM::Parameter::Value<String>'
+    Default: /energicos/PROJECT_ASA
+
+  Subproject:
+    Description: Enter Project Name
+    Type : 'AWS::SSM::Parameter::Value<String>'
+    Default: /energicos/GLOBAL
+
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
+    Type : 'AWS::SSM::Parameter::Value<String>'
+    Default: /energicos/ENVIRONMENT_NAME
+
+  TableName1:
+    Description: Name of the table
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /energicos/Table_4
+
+  TableName2:
+    Description: Name of the table
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /energicos/Table_5
+
+  StringElementType:
+    Description: String Attribute Type
+    Type: String
+    Default: "S"
+
+  HashKeyElementName:
+    Description: HashType PrimaryKey Name
+    Type: String
+    Default: pk
+
+  SortKeyName:
+    Description: Optional name of the sort key; Timestamp
+    Type: String
+    Default: sk
+
+  GlobalIndexName1:
+    Type: String
+    Default: gsi-1
+    Description: The name of the global secondary index
+
+  GlobalIndexName2:
+    Type: String
+    Default: gsi-2
+    Description: The name of the global secondary index
+
+  GlobalIndexName3:
+    Type: String
+    Default: gsi-3
+    Description: The name of the global secondary index
+
+  GlobalIndexName4:
+    Type: String
+    Default: gsi-4
+    Description: The name of the global secondary index
+
+  GlobalIndexName5:
+    Type: String
+    Default: gsi-5
+    Description: The name of the global secondary index
+
+  GlobalIndexName6:
+    Type: String
+    Default: gsi-6
+    Description: The name of the global secondary index
+
+  gsi1HashKeyName:
+    Description: Global secondary index-1 hash key; Latitude
+    Type: String
+    Default: gsi1-pk
+
+  gsi1SortKeyName:
+    Description: Global secondary index-1 sort key; Longitude
+    Type: String
+    Default: gsi1-sk
+
+  gsi2HashKeyName:
+    Description: Global secondary index-1 hash key; Latitude
+    Type: String
+    Default: gsi2-pk
+
+  gsi2SortKeyName:
+    Description: Global secondary index-1 sort key; Longitude
+    Type: String
+    Default: gsi2-sk
+
+  gsi3HashKeyName:
+    Description: Global secondary index-1 hash key; Latitude
+    Type: String
+    Default: gsi3-pk
+
+  gsi3SortKeyName:
+    Description: Global secondary index-1 sort key; Longitude
+    Type: String
+    Default: gsi3-sk
+
+  gsi4HashKeyName:
+    Description: Global secondary index-1 hash key; Latitude
+    Type: String
+    Default: gsi4-pk
+
+  gsi4SortKeyName:
+    Description: Global secondary index-1 sort key; Longitude
+    Type: String
+    Default: gsi4-sk
+
+  gsi5HashKeyName:
+    Description: Global secondary index-1 hash key; Latitude
+    Type: String
+    Default: gsi5-pk
+
+  gsi5SortKeyName:
+    Description: Global secondary index-1 sort key; Longitude
+    Type: String
+    Default: gsi5-sk
+
+  gsi6HashKeyName:
+    Description: Global secondary index-1 hash key; Latitude
+    Type: String
+    Default: gsi6-pk
+
+  gsi6SortKeyName:
+    Description: Global secondary index-1 sort key; Longitude
+    Type: String
+    Default: gsi6-sk
+
+  LocalIndexName1:
+    Description: The name of the local secondary index
+    Type: String
+    Default: lsi-1
+
+  LocalIndexName2:
+    Description: The name of the local secondary index
+    Type: String
+    Default: lsi-2
+
+  LocalIndexName3:
+    Description: The name of the local secondary index
+    Type: String
+    Default: lsi-3
+
+  LocalIndexName4:
+    Description: The name of the local secondary index
+    Type: String
+    Default: lsi-4
+
+  LocalIndexName5:
+    Description: The name of the local secondary index
+    Type: String
+    Default: lsi-5
+
+  lsi1AttributeName:
+    Description: Global secondary index-1 sort key; Longitude
+    Type: String
+    Default: lsi1-sk
+
+  lsi2AttributeName:
+    Description: Global secondary index-1 sort key; Longitude
+    Type: String
+    Default: lsi2-sk
+
+  lsi3AttributeName:
+    Description: Global secondary index-1 sort key; Longitude
+    Type: String
+    Default: lsi3-sk
+
+  lsi4AttributeName:
+    Description: Global secondary index-1 sort key; Longitude
+    Type: String
+    Default: lsi4-sk
+
+  lsi5AttributeName:
+    Description: Global secondary index-1 sort key; Longitude
+    Type: String
+    Default: lsi5-sk
+
+  BillingAndScalingMode:
+    Description: 'Specify how you are charged for read and write throughput and how you manage capacity.'
+    Type: String
+    Default: PAY_PER_REQUEST
+    AllowedValues: [PROVISIONED, PAY_PER_REQUEST]
+
+  SortKeyName:
+    Description: Optional name of the sort key
+    Type: String
+    Default: DueDate
+
+  SortKeyType:
+    Description: Type of the sort key (if SortKeyName is set)
+    Type: String
+    Default: "S"
+
+  PartitionKeyType1:
+    Description: Type of the partition key
+    Type: String
+    Default: "S"
+
+  PartitionKeyType2:
+    Description: Type of the partition key
+    Type: String
+    Default: "N"
+
+  PartitionKeyType3:
+    Description: Type of the partition key
+    Type: String
+    Default: "B"
+
+  AttributeName1:
+    Description: The name of an attribute which is part of any index and therefore must be part of the Table
+    Type: String
+    Default: Balance
+
+  AttributeName2:
+    Description: The name of an attribute which is part of any index and therefore must be part of the Table
+    Type: String
+    Default: Status
+
+  AttributeName3:
+    Description: The name of an attribute which is part of any index and therefore must be part of the Table
+    Type: String
+    Default: TotalAmt
+
+Resources:
+  OneTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${TableName1}
+      KeySchema:
+        - AttributeName: !Ref HashKeyElementName
+          KeyType: HASH
+        - AttributeName: !Ref SortKeyName
+          KeyType: RANGE
+      AttributeDefinitions:
+        - AttributeName: !Ref HashKeyElementName
+          AttributeType: !Ref StringElementType
+        - AttributeName: !Ref SortKeyName
+          AttributeType: !Ref StringElementType
+      GlobalSecondaryIndexes:
+        # gsi-1
+        - IndexName: !Ref GlobalIndexName1
+          KeySchema:
+            - AttributeName: !Ref gsi1HashKeyName
+              KeyType: HASH
+            - AttributeName: !Ref gsi1SortKeyName
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # gsi-2
+        - IndexName: !Ref GlobalIndexName2
+          KeySchema:
+            - AttributeName: !Ref gsi2HashKeyName
+              KeyType: HASH
+            - AttributeName: !Ref gsi2SortKeyName
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # gsi-3
+        - IndexName: !Ref GlobalIndexName3
+          KeySchema:
+            - AttributeName: !Ref gsi3HashKeyName
+              KeyType: HASH
+            - AttributeName: !Ref gsi3SortKeyName
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # gsi-4
+        - IndexName: !Ref GlobalIndexName4
+          KeySchema:
+            - AttributeName: !Ref gsi4HashKeyName
+              KeyType: HASH
+            - AttributeName: !Ref gsi4SortKeyName
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # gsi-5
+        - IndexName: !Ref GlobalIndexName5
+          KeySchema:
+            - AttributeName: !Ref gsi5HashKeyName
+              KeyType: HASH
+            - AttributeName: !Ref gsi5SortKeyName
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # gsi-6
+        - IndexName: !Ref GlobalIndexName6
+          KeySchema:
+            - AttributeName: !Ref gsi6HashKeyName
+              KeyType: HASH
+            - AttributeName: !Ref gsi6SortKeyName
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      LocalSecondaryIndexes:
+        # lsi-1
+        - IndexName: !Ref LocalIndexName1
+          KeySchema:
+            - AttributeName: !Ref HashKeyElementName
+              KeyType: HASH
+            - AttributeName: !Ref lsi1AttributeName
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # lsi-2
+        - IndexName: !Ref LocalIndexName2
+          KeySchema:
+            - AttributeName: !Ref HashKeyElementName
+              KeyType: HASH
+            - AttributeName: !Ref lsi2AttributeName
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # lsi-3
+        - IndexName: !Ref LocalIndexName3
+          KeySchema:
+            - AttributeName: !Ref HashKeyElementName
+              KeyType: HASH
+            - AttributeName: !Ref lsi3AttributeName
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # lsi-4
+        - IndexName: !Ref LocalIndexName4
+          KeySchema:
+            - AttributeName: !Ref HashKeyElementName
+              KeyType: HASH
+            - AttributeName: !Ref lsi4AttributeName
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # lsi-5
+        - IndexName: !Ref LocalIndexName5
+          KeySchema:
+            - AttributeName: !Ref HashKeyElementName
+              KeyType: HASH
+            - AttributeName: !Ref lsi5AttributeName
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      BillingMode: !Ref BillingAndScalingMode
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: True
+      SSESpecification:
+        SSEEnabled: True
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+      Tags:
+      - Key: Name
+        Value: !Ref TableName1
+      - Key: Name
+        Value: !Ref Project
+      - Key: backup
+        Value: thinbackup
+
+Outputs:
+  TableName1:
+    Description: Table name of the DynamoDB table
+    Value: !Ref WeatherData
+    Export:
+      Name: !Sub ${Project}-${TableName1}Table
+
+  TableArn1:
+    Description: Amazon Resource Name (ARN) of the DynamoDB table
+    Value: !GetAtt WeatherData.Arn
+    Export:
+      Name: !Sub ${Project}-${TableName1}TableARN
