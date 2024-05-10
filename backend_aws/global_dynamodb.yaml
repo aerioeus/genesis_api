@@ -39,15 +39,35 @@ Parameters:
     Type: String
     Default: "S"
 
-  HashKeyElementName:
+  PartitionKeyName:
     Description: HashType PrimaryKey Name
     Type: String
     Default: pk
+
+  PartitionKeyType1:
+    Description: Type of the partition key/Hashkey
+    Type: String
+    Default: "S"
+
+  PartitionKeyType2:
+    Description: Type of the partition key/Hashkey
+    Type: String
+    Default: "N"
+
+  PartitionKeyType3:
+    Description: Type of the partition key/Hashkey
+    Type: String
+    Default: "B"
 
   SortKeyName:
     Description: Optional name of the sort key; Timestamp
     Type: String
     Default: sk
+
+  SortKeyType:
+    Description: Type of the sort key (if SortKeyName is set)
+    Type: String
+    Default: "S"
 
   GlobalIndexName1:
     Type: String
@@ -195,61 +215,55 @@ Parameters:
     Default: PAY_PER_REQUEST
     AllowedValues: [PROVISIONED, PAY_PER_REQUEST]
 
-  SortKeyName:
-    Description: Optional name of the sort key
-    Type: String
-    Default: DueDate
-
-  SortKeyType:
-    Description: Type of the sort key (if SortKeyName is set)
-    Type: String
-    Default: "S"
-
-  PartitionKeyType1:
-    Description: Type of the partition key
-    Type: String
-    Default: "S"
-
-  PartitionKeyType2:
-    Description: Type of the partition key
-    Type: String
-    Default: "N"
-
-  PartitionKeyType3:
-    Description: Type of the partition key
-    Type: String
-    Default: "B"
-
-  AttributeName1:
-    Description: The name of an attribute which is part of any index and therefore must be part of the Table
-    Type: String
-    Default: Balance
-
-  AttributeName2:
-    Description: The name of an attribute which is part of any index and therefore must be part of the Table
-    Type: String
-    Default: Status
-
-  AttributeName3:
-    Description: The name of an attribute which is part of any index and therefore must be part of the Table
-    Type: String
-    Default: TotalAmt
-
 Resources:
   OneTable:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub ${TableName1}
+      AttributeDefinitions:
+        - AttributeName: !Ref PartitionKeyName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref SortKeyName
+          AttributeType: !Ref SortKeyType
+        - AttributeName: !Ref gsi1HashKeyName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref gsi1SortKeyName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref gsi2HashKeyName
+          AttributeType: !Ref PartitionKeyType2
+        - AttributeName: !Ref gsi2SortKeyName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref gsi3HashKeyName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref gsi3SortKeyName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref gsi4HashKeyName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref gsi4SortKeyName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref gsi5HashKeyName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref gsi5SortKeyName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref gsi6HashKeyName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref gsi6SortKeyName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref lsi1AttributeName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref lsi2AttributeName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref lsi3AttributeName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref lsi4AttributeName
+          AttributeType: !Ref PartitionKeyType1
+        - AttributeName: !Ref lsi5AttributeName
+          AttributeType: !Ref PartitionKeyType1
       KeySchema:
-        - AttributeName: !Ref HashKeyElementName
+        - AttributeName: !Ref PartitionKeyName
           KeyType: HASH
         - AttributeName: !Ref SortKeyName
           KeyType: RANGE
-      AttributeDefinitions:
-        - AttributeName: !Ref HashKeyElementName
-          AttributeType: !Ref StringElementType
-        - AttributeName: !Ref SortKeyName
-          AttributeType: !Ref StringElementType
       GlobalSecondaryIndexes:
         # gsi-1
         - IndexName: !Ref GlobalIndexName1
@@ -309,7 +323,7 @@ Resources:
         # lsi-1
         - IndexName: !Ref LocalIndexName1
           KeySchema:
-            - AttributeName: !Ref HashKeyElementName
+            - AttributeName: !Ref PartitionKeyName
               KeyType: HASH
             - AttributeName: !Ref lsi1AttributeName
               KeyType: RANGE
@@ -318,7 +332,7 @@ Resources:
         # lsi-2
         - IndexName: !Ref LocalIndexName2
           KeySchema:
-            - AttributeName: !Ref HashKeyElementName
+            - AttributeName: !Ref PartitionKeyName
               KeyType: HASH
             - AttributeName: !Ref lsi2AttributeName
               KeyType: RANGE
@@ -327,7 +341,7 @@ Resources:
         # lsi-3
         - IndexName: !Ref LocalIndexName3
           KeySchema:
-            - AttributeName: !Ref HashKeyElementName
+            - AttributeName: !Ref PartitionKeyName
               KeyType: HASH
             - AttributeName: !Ref lsi3AttributeName
               KeyType: RANGE
@@ -336,7 +350,7 @@ Resources:
         # lsi-4
         - IndexName: !Ref LocalIndexName4
           KeySchema:
-            - AttributeName: !Ref HashKeyElementName
+            - AttributeName: !Ref PartitionKeyName
               KeyType: HASH
             - AttributeName: !Ref lsi4AttributeName
               KeyType: RANGE
@@ -345,7 +359,7 @@ Resources:
         # lsi-5
         - IndexName: !Ref LocalIndexName5
           KeySchema:
-            - AttributeName: !Ref HashKeyElementName
+            - AttributeName: !Ref PartitionKeyName
               KeyType: HASH
             - AttributeName: !Ref lsi5AttributeName
               KeyType: RANGE
@@ -369,12 +383,12 @@ Resources:
 Outputs:
   TableName1:
     Description: Table name of the DynamoDB table
-    Value: !Ref WeatherData
+    Value: !Ref OneTable
     Export:
       Name: !Sub ${Project}-${TableName1}Table
 
   TableArn1:
     Description: Amazon Resource Name (ARN) of the DynamoDB table
-    Value: !GetAtt WeatherData.Arn
+    Value: !GetAtt OneTable.Arn
     Export:
       Name: !Sub ${Project}-${TableName1}TableARN
