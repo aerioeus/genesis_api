@@ -380,6 +380,41 @@ Resources:
       - Key: backup
         Value: thinbackup
 
+  RestrictedDynamoDBRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]  # Adjust based on your use case
+            Action: ['sts:AssumeRole']
+      Path: "/"
+      Policies:
+        - PolicyName: DenyFullTableScanPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: "DenyFullTableScanUnlessUsingIndex"
+                Effect: "Deny"
+                Action: "dynamodb:Scan"
+                Resource: !GetAtt OneTable.Arn
+                Condition:
+                  ForAnyValue:StringNotEquals:
+                    "dynamodb:IndexName":
+                      - "lsi1"
+                      - "lsi2"
+                      - "lsi3"
+                      - "lsi4"
+                      - "lsi5"
+                      - "gsi1"
+                      - "gsi2"
+                      - "gsi3"
+                      - "gsi4"
+                      - "gsi5"
+                      - "gsi6"
+
 Outputs:
   TableName1:
     Description: Table name of the DynamoDB table
