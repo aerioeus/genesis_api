@@ -1,58 +1,127 @@
-import os
-import requests
-import pandas as pd
 import json
-from rich import print as rprint
-import io  # Correctly import io for StringIO
+import requests
+from decimal import Decimal
+import re
+import pandas as pd
+import boto3
+import logging
 
-# Load sensitive data from environment variables for security
-USER_ID = 'DE17T29R57'
-PASSWORD = '4Bf/3Ap)3]r2,,h'
-GENESIS_URL = 'https://www-genesis.destatis.de/genesisWS/rest/2020/data/cube?'
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', filename='app.log', filemode='w')
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console.setFormatter(formatter)
+logging.getLogger('').addHandler(console)
 
-# Function to build the API URL
-def build_url(tab_code, area_type, content, start_year, classifier1, classifier2, key1, key2, lang):
-    return (
-        f"{GENESIS_URL}username={USER_ID}&password={PASSWORD}&name={tab_code}&area={area_type}"
-        f"&compress=true&contents={content}&startyear={start_year}&classifyingvariable1={classifier1}"
-        f"&classifyingkey1={key1}&classifyingvariable2={classifier2}&classifyingkey2={key2}&language={lang}"
-    )
+def build_url(config):
+    """Builds the request URL from configuration."""
+    url = (f"{config['genesis_url']}username={config['user_id']}&password={config['password']}&language=de"
+           f"&name={config['cubecode']}&area={config['areatype']}&compress=true")
+    if config['classifier1']:
+        url += f'&classifyingvariable1={config['classifier1']}'
+    if config['key1']:
+        url += f'&classifyingkey1={config['key1']}'
+    if config['classifier2']:
+        url += f'&classifyingvariable2={config['classifier2']}'
+    if config['key2']:
+        url += f'&classifyingkey2={config['key2']}'
+    return url
 
-# Function to fetch and parse data
-def fetch_and_parse_data(url):
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = json.loads(response.text)["Object"]['Content'].split('\n')
-        header = 'field_D;classifyingkey1;field_DFDN;quarter;year;value;field_e;field_;field__'
-        return pd.read_csv(io.StringIO(header + '\n' + '\n'.join(data[14:])), delimiter=';')
-    else:
-        raise Exception("Failed to fetch data from API")
+def make_request(url):
+    """Makes a HTTP GET request and handles potential errors."""
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raises a HTTPError for bad responses
+        return response
+    except requests.RequestException as e:
+        logging.error(f"HTTP request error: {e}")
+        raise SystemExit(e)
 
-# Function to transform data into a structured JSON format
-def transform_data(df, tab_code, content, classifier1, key1, classifier2, key2):
-    result = {'tab_code': tab_code, 'content': content, 'classifier1': classifier1, 'key1': key1,
-              'classifier2': classifier2, 'key2': key2, 'data': []}
-    for year, group in df.groupby('year'):
-        year_data = {'year': year, 'df': [{'quarter': row['quarter'], 'value': row['value']} for _, row in group.iterrows()]}
-        result['data'].append(year_data)
-    return result
+def parse_data(response_text):
+    """Parses JSON data from the HTTP response."""
+    try:
+        parsed_json = json.loads(response_text, parse_float=Decimal)
+        return parsed_json
+    except json.JSONDecodeError as e:
+        logging.error(f"Error decoding JSON: {e}")
+        raise
 
-# Main function to execute the script
-def main():
-    tab_code = '61241BM010'
-    area_type = 'all'
-    content = 'VST066'
-    start_year = ''
-    classifier1 = 'BEORT1'
-    classifier2 = 'LFGAT1'
-    key1 = '11000000'
-    key2 = 'LIEFERUNGOEL02'
-    lang = 'en'
+def extract_data(parsed_json):
+    """Extracts data from JSON and processes it into a DataFrame."""
+    try:
+        data = parsed_json["Object"]['Content'].split('\n')
+        info_pattern = re.compile(r'\d+=100')
+        info_matches = [match for line in data for match in info_pattern.findall(line)]
+        info_matches_str = ', '.join(info_matches)
+        filtered_response = [line + " " + info_matches_str for line in data if 'D' in line and 'e' in line and ('MONAT' in line or 'QUART' in line)]
+        extracted_data = [{'field_D': parts[0], 'classifyingkey1': parts[1], 'classifyingkey2': parts[2],
+                           'period': parts[3], 'year': int(parts[4]), 'value': float(parts[5]), 'field_e': parts[6],
+                           'base': info_matches_str}
+                          for parts in (line.split(';') for line in filtered_response)]
+        return pd.DataFrame(extracted_data)
+    except Exception as e:
+        logging.error(f"Data extraction error: {e}")
+        raise
 
-    url = build_url(tab_code, area_type, content, start_year, classifier1, classifier2, key1, key2, lang)
-    df = fetch_and_parse_data(url)
-    transformed_data = transform_data(df, tab_code, content, classifier1, key1, classifier2, key2)  # Pass all variables as arguments
-    rprint(json.dumps(transformed_data, indent=4))
+def prepare_data_for_dynamodb(df, period_key):
+    """Prepares data for uploading to DynamoDB."""
+    try:
+        result = {'data': []}
+        for year, group in df.groupby('year'):
+            result['data'].append({
+                'year': year,
+                'df': [{'period': row[period_key], 'value': row['value'], 'base': row['base']}
+                       for _, row in group.iterrows()]
+            })
+        return result
+    except Exception as e:
+        logging.error(f"Error preparing data for DynamoDB: {e}")
+        raise
+
+def upload_to_dynamodb(table, data_dict):
+    """Uploads prepared data to DynamoDB with detailed error handling."""
+    try:
+        for year_info in data_dict['data']:
+            for month_data in year_info['df']:
+                sort_key = f"IND#{data_dict['cubeCode']}#{year_info['year']}#{month_data['period']}"
+                item = {
+                    'pk': 'index', 'sk': sort_key,
+                    'lsi1': data_dict['cubeCode'],
+                    'attribute1': data_dict['classifyingVar1'],
+                    'attribute2': data_dict['classifyingKey1'],
+                    'attribute3': year_info['year'],
+                    'attribute4': month_data['period'],
+                    'attribute5': Decimal(str(month_data['value'])),
+                    'attribute6': month_data['base']
+                }
+                table.put_item(Item=item)
+                logging.info(f"Uploaded item: {item}")
+    except Exception as e:
+        logging.error(f"Error uploading to DynamoDB: {e}")
+        raise
+
+# Configuration
+config = {
+    'genesis_url': 'https://www-genesis.destatis.de/genesisWS/rest/2020/data/cube?',
+    'user_id': 'DE17T29R57',
+    'password': '4Bf/3Ap)3]r2,,h',
+    'cubecode': '61241BM010',
+    'areatype': 'all',
+    'classifier1': 'BEORT1',
+    'classifier2': 'LFGAT1',
+    'key1': '11000000',
+    'key2': 'LIEFERUNGOEL02',
+    'lang': 'en'
+}
 
 if __name__ == '__main__':
-    main()
+    url = build_url(config)
+    response = make_request(url)
+    parsed_json = parse_data(response.text)
+    df = extract_data(parsed_json)
+    period_key = 'quarter' if df['period'].str.contains('Q').any() else 'month'
+    result = prepare_data_for_dynamodb(df, period_key)
+    dynamodb = boto3.resource('dynamodb', region_name='eu-west-1')
+    table = dynamodb.Table('onetable')
+    upload_to_dynamodb(table, result)
